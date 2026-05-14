@@ -38,11 +38,15 @@ class Response
 
     /**
      * Send the HTTP response to the browser.
+     * 
+     * @return $this
      */
-    public function send(): void
+    public function send(): static
     {
         $this->sendHeaders();
         $this->sendContent();
+
+        return $this;
     }
 
     /**

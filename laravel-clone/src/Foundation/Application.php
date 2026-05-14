@@ -3,8 +3,8 @@
 namespace Framework\Foundation;
 
 use Framework\Container\Container;
+use Framework\Contracts\Http\Kernel as HttpKernelContract;
 use Framework\Http\Request;
-use Framework\Http\Response;
 
 class Application extends Container
 {
@@ -261,9 +261,11 @@ class Application extends Container
      */
     public function handleRequest(Request $request)
     {
-        return (new Response())
-            ->setContent('Hello World')
-            ->setStatus(200)
-            ->send();
+        /** @var HttpKernelContract $kernel */
+        $kernel = $this->make(HttpKernelContract::class);
+
+        $response = $kernel->handle($request)->send();
+
+        $kernel->terminate($request, $response);
     }
 }

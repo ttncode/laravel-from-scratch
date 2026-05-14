@@ -25,8 +25,8 @@ class ApplicationBuilder
     public function withKernels()
     {
         $this->app->singleton(
-            \Framework\Http\Kernel::class,
-            \Framework\Http\Kernel::class
+            \Framework\Contracts\Http\Kernel::class,
+            \Framework\Foundation\Http\Kernel::class
         );
 
         return $this;
