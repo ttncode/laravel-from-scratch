@@ -5,6 +5,7 @@ namespace Framework\Foundation\Http;
 use Framework\Contracts\Http\Kernel as KernelContract;
 use Framework\Foundation\Application;
 use Framework\Http\Response;
+use Framework\Routing\Router;
 
 class Kernel implements KernelContract
 {
@@ -15,7 +16,10 @@ class Kernel implements KernelContract
      */
     protected $bootstrappers = [];
 
-    public function __construct(protected Application $app) {}
+    public function __construct(
+        protected Application $app,
+        protected Router $router,
+    ) {}
 
     /**
      * Bootstrap the application for HTTP requests.
@@ -40,7 +44,16 @@ class Kernel implements KernelContract
         try {
             $this->bootstrap();
 
-            return new Response('Kernel is handling the request!', 200);
+            // Temporary: Load the routes manually here
+            $routingConfig = $this->app->make('config.routing');
+
+            if (isset($routingConfig['web']) && file_exists($routingConfig['web'])) {
+                $router = $this->router;
+                require $routingConfig['web'];
+            }
+
+            return $this->router->dispatch($request);
+
         } catch (\Throwable $th) {
             return new Response('Server error: ' . $th->getMessage(), 500);
         }

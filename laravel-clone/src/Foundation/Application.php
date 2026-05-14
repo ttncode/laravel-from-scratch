@@ -252,7 +252,6 @@ class Application extends Container
         return $path ? $base . DIRECTORY_SEPARATOR . ltrim($path, '/\\') : $base;
     }
 
-
     /**
      * Handle the incoming HTTP request and send the response to the browser.
      *
