@@ -4,7 +4,9 @@ namespace Framework\Foundation\Http;
 
 use Framework\Contracts\Http\Kernel as KernelContract;
 use Framework\Foundation\Application;
+use Framework\Foundation\Configuration\Middleware;
 use Framework\Http\Response;
+use Framework\Pipeline\Pipeline;
 use Framework\Routing\Router;
 
 class Kernel implements KernelContract
@@ -44,19 +46,38 @@ class Kernel implements KernelContract
         try {
             $this->bootstrap();
 
-            // Temporary: Load the routes manually here
+            /** @var Middleware $middleware */
+            $middleware = $this->app->make(Middleware::class);
+            $globalMiddleware = $middleware->getGlobalMiddleware();
+
+            // Run the request through the pipeline
+            return (new Pipeline($this->app))
+                ->send($request)
+                ->through($globalMiddleware)
+                ->then($this->dispatchToRouter());
+        } catch (\Throwable $th) {
+            return new Response('Server error: ' . $th->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Dispatch the request to the router.
+     *
+     * @return \Closure
+     */
+    protected function dispatchToRouter(): \Closure
+    {
+        return function ($request) {
             $routingConfig = $this->app->make('config.routing');
 
             if (isset($routingConfig['web']) && file_exists($routingConfig['web'])) {
                 $router = $this->router;
+
                 require $routingConfig['web'];
             }
 
             return $this->router->dispatch($request);
-
-        } catch (\Throwable $th) {
-            return new Response('Server error: ' . $th->getMessage(), 500);
-        }
+        };
     }
 
     /**
