@@ -1,13 +1,10 @@
 <?php
 
-use Framework\Routing\Router;
+use App\Controllers\HomeController;
+use Framework\Support\Facades\Route;
 
-/** @var Router $router */
+Route::get('/', [HomeController::class, 'index']);
 
-$router->get('/', function () {
-    return '<h1 style="color: red;">Welcome to the Home Page!</h1>';
-});
-
-$router->get('/about', function () {
+Route::get('/about', function () {
     return '<h1 style="color: blue;">About Us</h1>';
 });

@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use Framework\Routing\Router;
+use Framework\Support\Facades\Route;
 use Framework\Support\ServiceProvider;
 
 class RoutingServiceProvider extends ServiceProvider
@@ -20,6 +21,9 @@ class RoutingServiceProvider extends ServiceProvider
 
         if (isset($routingConfig['web']) && file_exists($routingConfig['web'])) {
             $router = $this->app->make(Router::class);
+
+            // Initialize the Route facade with the router instance
+            Route::setRouter($router);
 
             require $routingConfig['web'];
         }

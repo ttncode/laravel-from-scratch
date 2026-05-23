@@ -2,6 +2,7 @@
 
 namespace Framework\Routing;
 
+use Framework\Container\Container;
 use Framework\Http\Request;
 use Framework\Http\Response;
 
@@ -9,6 +10,8 @@ class Router
 {
     /** @var Route[] */
     protected array $routes = [];
+
+    public function __construct(protected Container $container) {}
 
     /**
      * Register a new GET route with the router.
@@ -60,8 +63,7 @@ class Router
 
         foreach ($this->routes as $route) {
             if ($route->matches($method, $path)) {
-                // Execute the route's action
-                $content = call_user_func($route->action);
+                $content = $this->container->call($route->action, ['request' => $request]);
 
                 if ($content instanceof Response) {
                     return $content;

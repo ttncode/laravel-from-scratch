@@ -179,6 +179,43 @@ class Container
         return $resolved;
     }
 
+    /**
+     * Call the given Closure / class@method and inject its dependencies.
+     *
+     * @param callable|array $callback
+     * @param array $params
+     * @return mixed
+     */
+    public function call(array|callable $callback, array $params = []): mixed
+    {
+        if ($callback instanceof Closure) {
+            $reflection = new \ReflectionFunction($callback);
+        } elseif (is_array($callback)) {
+            // If the callable is an array like [ClassName::class, 'method'],
+            // resolve the class name to an instance so the method is invoked
+            // on the object (not statically).
+            $classOrObject = $callback[0];
+            $method = $callback[1];
+
+            // If a class name was provided, build it from the container.
+            if (is_string($classOrObject)) {
+                $callback[0] = $this->make($classOrObject);
+                $classOrObject = $callback[0];
+            }
+
+            $reflection = new \ReflectionMethod($classOrObject, $method);
+        } else {
+            $reflection = new \ReflectionFunction(\Closure::fromCallable($callback));
+        }
+
+        $dependencies = $this->resolveDependencies(
+            $reflection->getParameters(),
+            $params
+        );
+
+        return $callback(...$dependencies);
+    }
+
 
     # ═══════════════════════════════════════════════════════════════════════════
     # Internal Helpers
