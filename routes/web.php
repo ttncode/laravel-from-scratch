@@ -1,10 +1,10 @@
 <?php
 
-use App\Controllers\HomeController;
+use App\Controllers\ProfileController;
 use Framework\Support\Facades\Route;
 
-Route::get('/', [HomeController::class, 'index']);
-
-Route::get('/about', function () {
-    return '<h1 style="color: blue;">About Us</h1>';
+Route::get('/', function () {
+    return view('welcome');
 });
+
+Route::get('/profile', [ProfileController::class, 'index']);

@@ -5,7 +5,10 @@
     "psr-4": {
       "App\\": "app/",
       "Framework\\": "src/"
-    }
+    },
+    "files": [
+      "src/helpers.php"
+    ]
   },
   "require": {
     "php": "^8.2",

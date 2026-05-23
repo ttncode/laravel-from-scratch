@@ -1,0 +1,42 @@
+.page {
+    width: min(100%, 780px);
+    background: #ffffff;
+    border-radius: 24px;
+    box-shadow: 0 25px 70px rgba(15, 23, 42, 0.08);
+    padding: 40px;
+}
+
+h1 {
+    margin-top: 0;
+    font-size: clamp(2.25rem, 2.5vw, 3rem);
+    letter-spacing: -0.05em;
+}
+
+p {
+    line-height: 1.8;
+    font-size: 1rem;
+    color: #374151;
+}
+
+.button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 14px 22px;
+    border-radius: 999px;
+    background: #4338ca;
+    color: #ffffff;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.button:hover {
+    background: #3730a3;
+    transform: translateY(-1px);
+}
+
+.meta {
+    margin-top: 30px;
+    color: #6b7280;
+    font-size: 0.95rem;
+}

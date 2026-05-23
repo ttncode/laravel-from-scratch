@@ -4,10 +4,10 @@ namespace App\Controllers;
 
 use Framework\Http\Request;
 
-class HomeController
+class ProfileController
 {
     public function index(Request $request)
     {
-        return '<h1 style="color: blue;">Welcome to the Home Page!</h1>';
+        return view('profile', ['name' => 'TTNCode']);
     }
 }

@@ -15,8 +15,6 @@ class RoutingServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        echo '<h4>[RoutingServiceProvide] - Booting routes...</h4>';
-
         $routingConfig = $this->app->make('config.routing');
 
         if (isset($routingConfig['web']) && file_exists($routingConfig['web'])) {

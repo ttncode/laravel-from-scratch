@@ -1,0 +1,47 @@
+.card {
+    width: min(100%, 720px);
+    background: #ffffff;
+    border-radius: 24px;
+    box-shadow: 0 25px 70px rgba(15, 23, 42, 0.08);
+    padding: 40px;
+}
+
+h1 {
+    margin: 0 0 12px;
+    font-size: clamp(2rem, 2.25vw, 2.5rem);
+}
+
+p {
+    margin: 0 0 18px;
+    line-height: 1.75;
+    color: #475569;
+}
+
+strong {
+    color: #0f172a;
+}
+
+.link {
+    color: #4338ca;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.link:hover {
+    text-decoration: underline;
+}
+
+.badge {
+    display: inline-flex;
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #312e81;
+    font-size: 0.95rem;
+}
+
+.footer {
+    margin-top: 30px;
+    color: #64748b;
+    font-size: 0.95rem;
+}

@@ -3,6 +3,7 @@
 namespace Framework\Foundation;
 
 use App\Providers\RoutingServiceProvider;
+use App\Providers\ViewServiceProvider;
 use Framework\Container\Container;
 use Framework\Contracts\Http\Kernel as HttpKernelContract;
 use Framework\Http\Request;
@@ -105,6 +106,7 @@ class Application extends Container
     protected function registerBaseServiceProviders(): void
     {
         $this->register(new RoutingServiceProvider($this));
+        $this->register(new ViewServiceProvider($this));
     }
 
     /**
