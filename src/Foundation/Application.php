@@ -70,6 +70,7 @@ class Application extends Container
 
         $this->registerBaseBindings();
         $this->registerBaseServiceProviders();
+        $this->registerCoreContainerAliases();
     }
 
     /**
@@ -107,6 +108,30 @@ class Application extends Container
     {
         $this->register(new RoutingServiceProvider($this));
         $this->register(new ViewServiceProvider($this));
+    }
+
+    /**
+     * Register the core class aliases in the container.
+     * 
+     * When you bind a 'config' service you can access it via:
+     * - config
+     * - \Framework\Contracts\Config\Repository
+     * - \Framework\Config\Repository
+     *
+     * @return void
+     */
+    public function registerCoreContainerAliases()
+    {
+        $aliases = [
+            'app' => [self::class, \Framework\Container\Container::class],
+            'config' => [\Framework\Contracts\Config\Repository::class, \Framework\Config\Repository::class],
+        ];
+
+        foreach ($aliases as $key => $aliases) {
+            foreach ($aliases as $alias) {
+                $this->alias($key, $alias);
+            }
+        }
     }
 
     /**

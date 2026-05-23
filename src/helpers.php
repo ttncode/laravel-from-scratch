@@ -43,3 +43,53 @@ if (! function_exists('asset')) {
         return '/' . ltrim(str_replace('\\', '/', $path), '/');
     }
 }
+
+if (! function_exists('env')) {
+    /**
+     * Get the value of an environment variable.
+     *
+     * @param string $key
+     * @param mixed $default
+     * @return mixed
+     */
+    function env(string $key, mixed $default = null): mixed
+    {
+        $value = getenv($key);
+
+        if ($value === false) {
+            return $default;
+        }
+
+        // Convert "true"/"false" to boolean
+        if (strtolower($value) === 'true') {
+            return true;
+        }
+        if (strtolower($value) === 'false') {
+            return false;
+        }
+
+        return $value;
+    }
+}
+
+if (! function_exists('config')) {
+    /**
+     * Get the specified configuration value.
+     *
+     * @param array<string, mixed>|string $key
+     * @param mixed $default
+     * @return mixed
+     */
+    function config(array|string $key, mixed $default = null): mixed
+    {
+        if (is_null($key)) {
+            return app('config');
+        }
+
+        if (is_array($key)) {
+            return app('config')->set($key);
+        }
+
+        return app('config')->get($key, $default);
+    }
+}

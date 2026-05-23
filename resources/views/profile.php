@@ -13,7 +13,6 @@
         <p>Name: <span class="badge"><?= htmlspecialchars($name ?? 'Guest') ?></span></p>
         <p>Welcome back! This page is rendered by your controller and view system.</p>
         <p><a class="link" href="/">← Back to welcome</a></p>
-        <div class="footer">Simple PHP view rendering with `view('profile', [...])`</div>
     </article>
 </body>
 </html>

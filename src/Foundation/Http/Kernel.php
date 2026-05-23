@@ -19,6 +19,8 @@ class Kernel implements KernelContract
     protected array $bootstrappers = [
         \Framework\Foundation\Bootstrap\RegisterProviders::class,
         \Framework\Foundation\Bootstrap\BootProviders::class,
+        \Framework\Foundation\Bootstrap\LoadEnvironmentVariables::class,
+        \Framework\Foundation\Bootstrap\LoadConfiguration::class,
     ];
 
     public function __construct(
