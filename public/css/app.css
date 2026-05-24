@@ -16,11 +16,88 @@ html, body {
 
 body {
     min-height: 100vh;
+    margin: 0;
+    background: #eef2ff;
+    color: #111827;
+}
+
+.app-shell {
+    min-height: 100vh;
+    padding: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 24px;
-    background: #eef2ff;
+    position: relative;
+}
+
+.toast-container {
+    position: fixed;
+    top: 24px;
+    right: 24px;
+    width: min(360px, calc(100% - 48px));
+    display: grid;
+    gap: 16px;
+    z-index: 20;
+}
+
+.toast {
+    border-radius: 16px;
+    padding: 18px 20px;
+    box-shadow: 0 20px 50px rgba(15, 23, 42, 0.12);
+    background: #f8fafc;
+    color: #0f172a;
+    border: 1px solid rgba(99, 102, 241, 0.15);
+}
+
+.toast-heading {
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: #111827;
+}
+
+.toast-body {
+    line-height: 1.6;
+    color: #374151;
+}
+
+.toast-error {
+    background: #fee2e2;
+    border-color: rgba(220, 38, 38, 0.2);
+}
+
+.toast-success {
+    background: #ecfdf5;
+    border-color: rgba(16, 185, 129, 0.2);
+}
+
+.toast-info {
+    background: #eff6ff;
+    border-color: rgba(59, 130, 246, 0.2);
+}
+
+.toast-error-list {
+    margin: 12px 0 0;
+    padding-left: 20px;
+    color: #991b1b;
+}
+
+.toast-hidden {
+    opacity: 0;
+    transform: translateY(-12px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    pointer-events: none;
+}
+
+.app-env {
+    position: fixed;
+    left: 24px;
+    bottom: 24px;
+    padding: 10px 14px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.08);
+    color: #111827;
+    font-size: 0.85rem;
+    letter-spacing: 0.01em;
 }
 
 a {

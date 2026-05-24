@@ -34,6 +34,20 @@ if (! function_exists('view')) {
     }
 }
 
+if (! function_exists('layout')) {
+    /**
+     * Render a layout view with a child slot.
+     */
+    function layout(string $view, ?\Closure $slot = null, array $data = []): string
+    {
+        if ($slot) {
+            $data['slot'] = $slot;
+        }
+
+        return view($view, $data);
+    }
+}
+
 if (! function_exists('asset')) {
     /**
      * Generate an asset URL for the application.
