@@ -42,10 +42,10 @@ When the Router matches this route, it:
 
 ```bash
 mkdir -p app/Controllers
-touch app/Controllers/HomeController.php
+touch app/Controllers/ProfileController.php
 ```
 
-### Create a Controller: `app/Controllers/HomeController.php`
+### Create a Controller: `app/Controllers/ProfileController.php`
 
 ```php
 <?php
@@ -54,14 +54,15 @@ namespace App\Controllers;
 
 use Framework\Http\Request;
 
-class HomeController
+class ProfileController
 {
-    // The Container will automatically inject this if we added a Logger binding!
-    // public function __construct(Logger $logger) {}
-
     public function index(Request $request)
     {
-        return "Welcome to the Home Page (via Controller)! Method: " . $request->method();
+        return view('profile', [
+            'name' => 'TTNCode',
+            'email' => 'ttncode@example.com',
+            'password' => 'secret123',
+        ]);
     }
 }
 ```
@@ -144,11 +145,11 @@ Update your routes file to use the new Controller.
 <?php
 
 use Framework\Routing\Router;
-use App\Controllers\HomeController;
+use App\Controllers\ProfileController;
 
 /** @var Router $router */
 
-$router->get('/', [HomeController::class, 'index']);
+$router->get('/profile', [ProfileController::class, 'index']);
 
 $router->get('/about', function () {
     return 'About Us (Still a Closure)';

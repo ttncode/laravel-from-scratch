@@ -196,7 +196,7 @@ return [
 
 ## ✅ Verify
 
-Update your `HomeController@index` to test the config:
+Update your `ProfileController@index` to test the config:
 
 ```php
     public function index(Request $request)

@@ -170,7 +170,7 @@ return $app;
 ```
 *(Always use `htmlspecialchars` when echoing variables to prevent XSS attacks!)*
 
-### Update the Controller: `app/Controllers/HomeController.php`
+### Update the Controller: `app/Controllers/ProfileController.php`
 
 ```php
 <?php
@@ -179,15 +179,14 @@ namespace App\Controllers;
 
 use Framework\Http\Request;
 
-class HomeController
+class ProfileController
 {
     public function index(Request $request)
     {
-        // The business logic is clean and separate from presentation.
-        return view('home', [
-            'title'   => 'Laravel Clone',
-            'heading' => 'Users List',
-            'users'   => ['Alice', 'Bob', 'Charlie']
+        return view('profile', [
+            'name' => 'TTNCode',
+            'email' => 'ttncode@example.com',
+            'password' => 'secret123',
         ]);
     }
 }

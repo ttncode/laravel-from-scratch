@@ -81,43 +81,55 @@ Each step follows this exact structure:
 laravel-clone/
 ├── app/
 │   ├── Controllers/
-│   │   └── HomeController.php
+│   │   └── ProfileController.php
 │   └── Providers/
-│       └── AppServiceProvider.php
+│       ├── AppServiceProvider.php
+│       ├── RoutingServiceProvider.php
+│       └── ViewServiceProvider.php
 ├── bootstrap/
 │   └── app.php
 ├── config/
 │   └── app.php
 ├── public/
-│   └── index.php           ← Grows across steps, finalized in Step 05
+│   └── index.php           ← Entry point for all HTTP requests
 ├── resources/
-│   └── views/
-│       └── home.php
+│   ├── views/
+│   │   ├── layouts/
+│   │   │   └── app.php
+│   │   ├── profile.php
+│   │   └── welcome.php
 ├── routes/
 │   └── web.php
 ├── src/
 │   ├── Container/
-│   │   └── Container.php   ← Step 02
+│   │   └── Container.php
 │   ├── Foundation/
-│   │   └── Application.php ← Step 03
+│   │   ├── Application.php
+│   │   └── Bootstrap/
+│   │       ├── BootProviders.php
+│   │       ├── LoadConfiguration.php
+│   │       ├── LoadEnvironmentVariables.php
+│   │       └── RegisterProviders.php
 │   ├── Http/
-│   │   ├── Request.php     ← Step 04
-│   │   ├── Response.php    ← Step 04
-│   │   └── Kernel.php      ← Step 05
+│   │   ├── Kernel.php
+│   │   ├── Request.php
+│   │   └── Response.php
 │   ├── Pipeline/
-│   │   └── Pipeline.php    ← Step 07
+│   │   └── Pipeline.php
 │   ├── Routing/
-│   │   ├── Router.php      ← Step 06
-│   │   └── Route.php       ← Step 06
+│   │   ├── Route.php
+│   │   └── Router.php
 │   ├── Support/
-│   │   └── ServiceProvider.php ← Step 08
-│   ├── View/
-│   │   └── ViewFactory.php ← Step 10
-│   ├── Config/
-│   │   └── Repository.php  ← Step 11
+│   │   ├── Facades/
+│   │   │   └── Route.php
+│   │   └── ServiceProvider.php
 │   ├── Validation/
-│   │   └── Validator.php   ← Step 12
-│   └── helpers.php         ← Step 10
+│   │   └── Validator.php
+│   ├── View/
+│   │   └── View.php
+│   ├── Config/
+│   │   └── Repository.php
+│   └── helpers.php
 └── composer.json
 ```
 

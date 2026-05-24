@@ -151,7 +151,7 @@ class Validator
 
 ### Test It in the Controller
 
-Update `app/Controllers/HomeController.php` to handle a simulated form submission.
+Update `app/Controllers/ProfileController.php` to handle a simulated form submission.
 
 ```php
 <?php
@@ -162,7 +162,7 @@ use Framework\Http\Request;
 use Framework\Http\Response;
 use Framework\Validation\Validator;
 
-class HomeController
+class ProfileController
 {
     public function store(Request $request)
     {
@@ -192,7 +192,7 @@ class HomeController
 Update `routes/web.php` to add the route:
 
 ```php
-$router->get('/test-validation', [\App\Controllers\HomeController::class, 'store']);
+$router->get('/test-validation', [\App\Controllers\ProfileController::class, 'store']);
 ```
 
 ---

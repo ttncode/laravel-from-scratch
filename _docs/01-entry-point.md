@@ -109,7 +109,7 @@ Composer does two things here:
 
 **PSR-4 mapping explained:**
 - `Framework\Http\Kernel` → `src/Http/Kernel.php`
-- `App\Controllers\HomeController` → `app/Controllers/HomeController.php`
+- `App\Controllers\ProfileController` → `app/Controllers/ProfileController.php`
 
 Run:
 
