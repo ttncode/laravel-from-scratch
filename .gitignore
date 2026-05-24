@@ -1,2 +1,4 @@
 vendor
 original
+.env
+.php-version
