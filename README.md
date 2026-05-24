@@ -60,6 +60,7 @@ This repository is a small, readable framework built from first principles. It d
 ```bash
 git clone https://github.com/your-username/laravel-from-scratch.git
 cd laravel-from-scratch
+cp .env.example .env
 ```
 
 2. Install dependencies:
