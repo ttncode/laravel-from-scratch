@@ -9,14 +9,14 @@ After Step 12, your app can validate input — but it still has nowhere to persi
 ```php
 public function store(Request $request)
 {
-    $pdo = new PDO('mysql:host=127.0.0.1;dbname=myapp', 'root', '');
+    $pdo = new PDO('sqlite:' . __DIR__ . '/../database/database.sqlite');
     $stmt = $pdo->prepare('INSERT INTO users (name, email) VALUES (?, ?)');
     $stmt->execute([$request->input('name'), $request->input('email')]);
 }
 
 public function index()
 {
-    $pdo = new PDO('mysql:host=127.0.0.1;dbname=myapp', 'root', '');
+    $pdo = new PDO('sqlite:' . __DIR__ . '/../database/database.sqlite');
     $stmt = $pdo->query('SELECT * FROM users WHERE active = 1 ORDER BY name');
     return $stmt->fetchAll(PDO::FETCH_OBJ);
 }
@@ -27,331 +27,481 @@ public function index()
 1. **No connection reuse:** Every method creates a new PDO connection — expensive.
 2. **String concatenation danger:** Building `WHERE id = $id` directly leads to SQL injection.
 3. **No fluency:** Adding `ORDER BY`, `LIMIT`, `JOIN` means rewriting entire SQL strings.
-4. **Driver coupling:** Switching from MySQL to SQLite requires rewriting every query.
+4. **Driver coupling:** Switching from SQLite to MySQL requires rewriting every query connection and dialect.
 
 ---
 
 ## 💡 The Solution: DatabaseManager + Connection + Query Builder
 
-Laravel splits the database layer into three collaborating objects:
+We split the database layer into three collaborating classes inside the `Framework\Database` namespace:
 
 ```
 DatabaseServiceProvider
     └── registers 'db' → DatabaseManager
             └── connection($name) → Connection (wraps PDO)
-                    └── table($table) → Query\Builder (fluent SQL)
+                    └── table($table) → Query\Builder (fluent SQL compilation & execution)
 ```
 
-- **`DatabaseManager`** — resolves named connections from config; lazy-connects.
-- **`Connection`** — owns a PDO instance; executes raw SQL with bindings.
-- **`Query\Builder`** — fluent API that compiles to parameterised SQL.
+- **`DatabaseManager`** — resolves and manages database connections, lazy-connecting as needed using configurations loaded from `config/database.php`.
+- **`Connection`** — wraps a PDO instance and provides safe query execution methods with parameterized bindings.
+- **`Query\Builder`** — provides a fluent, driver-agnostic SQL query builder interface and compiles queries to SQL dynamically.
 
 Usage in a controller:
 
 ```php
 // Via the container:
-$users = $this->app['db']->table('users')->where('active', 1)->get();
-
-// Via the DB facade (Step 16):
-$users = DB::table('users')->where('active', 1)->get();
+$users = $this->app->make('db')->table('users')->where('name', 'Alice')->get();
 ```
 
 ---
 
 ## 🏗 Implementation
 
-### File: `DatabaseServiceProvider.php` (original, simplified)
+Let's create the directories and files we need:
+
+```bash
+mkdir -p src/Database/Query
+touch src/Database/DatabaseServiceProvider.php
+touch src/Database/DatabaseManager.php
+touch src/Database/Connection.php
+touch src/Database/Query/Builder.php
+```
+
+### File: `src/Database/DatabaseServiceProvider.php`
+
+The Service Provider that registers our database connection services in the Container.
 
 ```php
 <?php
 
-namespace Illuminate\Database;
+namespace Framework\Database;
 
-use Illuminate\Database\Connectors\ConnectionFactory;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\ServiceProvider;
+use Framework\Support\ServiceProvider;
 
 class DatabaseServiceProvider extends ServiceProvider
 {
-    public function boot()
+    /**
+     * Bootstrap any database services.
+     */
+    public function boot(): void
     {
-        Model::setConnectionResolver($this->app['db']);
-
-        Model::setEventDispatcher($this->app['events']);
+        // Eloquent ORM connection resolver configuration will be added here in Step 14
     }
 
-    public function register()
+    /**
+     * Register any database services in the Container.
+     */
+    public function register(): void
     {
-        Model::clearBootedModels();
-
-        $this->registerConnectionServices();
-    }
-
-    protected function registerConnectionServices()
-    {
-        // The connection factory creates actual PDO connections on demand.
-        $this->app->singleton('db.factory', function ($app) {
-            return new ConnectionFactory($app);
-        });
-
-        // The database manager resolves named connections from config.
         $this->app->singleton('db', function ($app) {
-            return new DatabaseManager($app, $app['db.factory']);
+            return new DatabaseManager($app);
         });
 
         $this->app->bind('db.connection', function ($app) {
-            return $app['db']->connection();
+            return $app->make('db')->connection();
         });
-
-        $this->app->bind('db.schema', function ($app) {
-            return $app['db']->connection()->getSchemaBuilder();
-        });
-
-        $this->app->singleton('db.transactions', function () {
-            return new DatabaseTransactionsManager;
-        });
-    }
-}
-```
-
-### How `DatabaseManager::connection()` works
-
-```php
-<?php
-
-namespace Illuminate\Database;
-
-class DatabaseManager implements ConnectionResolverInterface
-{
-    protected $app;
-    protected $factory;
-    protected $connections = [];
-
-    public function __construct($app, ConnectionFactory $factory)
-    {
-        $this->app = $app;
-        $this->factory = $factory;
-
-        $this->reconnector = function ($connection) {
-            $connection->setPdo(
-                $this->reconnect($connection->getNameWithReadWriteType())->getRawPdo()
-            );
-        };
-    }
-
-    public function connection($name = null)
-    {
-        [$database, $type] = $this->parseConnectionName($name = $name ?: $this->getDefaultConnection());
-
-        // Connections are cached — only one PDO per named connection.
-        if (! isset($this->connections[$name])) {
-            $this->connections[$name] = $this->configure(
-                $this->makeConnection($database), $type
-            );
-        }
-
-        return $this->connections[$name];
-    }
-
-    public function getDefaultConnection()
-    {
-        return $this->app['config']['database.default'];
-    }
-
-    // __call forwards any unknown method to the default connection.
-    // This is why DB::table() works via the facade.
-    public function __call($method, $parameters)
-    {
-        return $this->connection()->$method(...$parameters);
-    }
-}
-```
-
-### How `Connection` executes queries
-
-```php
-<?php
-
-namespace Illuminate\Database;
-
-class Connection implements ConnectionInterface
-{
-    protected $pdo;
-    protected $database;
-    protected $tablePrefix = '';
-    protected $config = [];
-    protected $queryGrammar;
-    protected $postProcessor;
-
-    public function __construct($pdo, $database = '', $tablePrefix = '', array $config = [])
-    {
-        $this->pdo = $pdo;
-        $this->database = $database;
-        $this->tablePrefix = $tablePrefix;
-        $this->config = $config;
-
-        $this->useDefaultQueryGrammar();
-        $this->useDefaultPostProcessor();
-    }
-
-    // Entry point for the fluent Query Builder.
-    public function table($table, $as = null)
-    {
-        return $this->query()->from($table, $as);
-    }
-
-    public function query()
-    {
-        return new QueryBuilder(
-            $this, $this->getQueryGrammar(), $this->getPostProcessor()
-        );
-    }
-
-    // Executes a SELECT — uses prepared statements with bound values.
-    public function select($query, $bindings = [], $useReadPdo = true, array $fetchUsing = [])
-    {
-        return $this->run($query, $bindings, function ($query, $bindings) use ($useReadPdo, $fetchUsing) {
-            $statement = $this->prepared(
-                $this->getPdoForSelect($useReadPdo)->prepare($query)
-            );
-
-            $this->bindValues($statement, $this->prepareBindings($bindings));
-
-            $statement->execute();
-
-            return $statement->fetchAll(...$fetchUsing);
-        });
-    }
-
-    // Binds values safely — prevents SQL injection.
-    public function bindValues($statement, $bindings)
-    {
-        foreach ($bindings as $key => $value) {
-            $statement->bindValue(
-                is_string($key) ? $key : $key + 1,
-                $value,
-                match (true) {
-                    is_int($value) => PDO::PARAM_INT,
-                    is_resource($value) => PDO::PARAM_LOB,
-                    default => PDO::PARAM_STR
-                },
-            );
-        }
-    }
-}
-```
-
-### How `Query\Builder` builds fluent queries
-
-```php
-<?php
-
-namespace Illuminate\Database\Query;
-
-class Builder implements BuilderContract
-{
-    public $connection;
-    public $grammar;
-    public $processor;
-
-    public $bindings = [
-        'select' => [], 'from' => [], 'join' => [],
-        'where' => [], 'groupBy' => [], 'having' => [],
-        'order' => [], 'union' => [], 'unionOrder' => [],
-    ];
-
-    public $columns;
-    public $from;
-    public $wheres = [];
-    public $orders;
-    public $limit;
-    public $offset;
-
-    public function __construct(
-        ConnectionInterface $connection,
-        ?Grammar $grammar = null,
-        ?Processor $processor = null,
-    ) {
-        $this->connection = $connection;
-        $this->grammar = $grammar ?: $connection->getQueryGrammar();
-        $this->processor = $processor ?: $connection->getPostProcessor();
-    }
-
-    public function select($columns = ['*'])
-    {
-        $this->columns = [];
-        $this->bindings['select'] = [];
-
-        $columns = is_array($columns) ? $columns : func_get_args();
-
-        foreach ($columns as $as => $column) {
-            $this->columns[] = $column;
-        }
-
-        return $this;
-    }
-
-    public function from($table, $as = null)
-    {
-        $this->from = $as ? "{$table} as {$as}" : $table;
-
-        return $this;
-    }
-
-    public function join($table, $first, $operator = null, $second = null, $type = 'inner', $where = false)
-    {
-        $join = $this->newJoinClause($this, $type, $table);
-
-        if ($first instanceof Closure) {
-            $first($join);
-            $this->joins[] = $join;
-            $this->addBinding($join->getBindings(), 'join');
-        } else {
-            $method = $where ? 'where' : 'on';
-            $this->joins[] = $join->$method($first, $operator, $second);
-            $this->addBinding($join->getBindings(), 'join');
-        }
-
-        return $this;
-    }
-
-    public function leftJoin($table, $first, $operator = null, $second = null)
-    {
-        return $this->join($table, $first, $operator, $second, 'left');
-    }
-
-    public function distinct()
-    {
-        $columns = func_get_args();
-
-        if ($columns !== []) {
-            $this->distinct = is_array($columns[0]) || is_bool($columns[0]) ? $columns[0] : $columns;
-        } else {
-            $this->distinct = true;
-        }
-
-        return $this;
     }
 }
 ```
 
 ---
 
+### File: `src/Database/DatabaseManager.php`
+
+The manager class that resolves named database connections based on config, caching opened PDO connections for reuse.
+
+```php
+<?php
+
+namespace Framework\Database;
+
+use PDO;
+use InvalidArgumentException;
+use Framework\Config\Repository as ConfigRepository;
+
+class DatabaseManager
+{
+    protected $app;
+    protected array $connections = [];
+
+    public function __construct($app)
+    {
+        $this->app = $app;
+    }
+
+    /**
+     * Resolve a connection instance by name.
+     */
+    public function connection(?string $name = null): Connection
+    {
+        $name = $name ?: $this->getDefaultConnection();
+
+        if (! isset($this->connections[$name])) {
+            $this->connections[$name] = $this->makeConnection($name);
+        }
+
+        return $this->connections[$name];
+    }
+
+    /**
+     * Create a new Connection instance.
+     */
+    protected function makeConnection(string $name): Connection
+    {
+        $config = $this->configuration($name);
+        $pdo = $this->createPdoConnection($config);
+
+        return new Connection($pdo, $name);
+    }
+
+    /**
+     * Create a concrete PDO instance.
+     */
+    protected function createPdoConnection(array $config): PDO
+    {
+        $driver = $config['driver'] ?? 'mysql';
+
+        if ($driver === 'sqlite') {
+            $dbPath = $config['database'];
+            return new PDO("sqlite:{$dbPath}", null, null, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_OBJ,
+            ]);
+        }
+
+        if ($driver === 'mysql') {
+            $dsn = sprintf(
+                'mysql:host=%s;port=%s;dbname=%s;charset=%s',
+                $config['host'] ?? '127.0.0.1',
+                $config['port'] ?? '3306',
+                $config['database'] ?? '',
+                $config['charset'] ?? 'utf8mb4'
+            );
+
+            return new PDO($dsn, $config['username'] ?? 'root', $config['password'] ?? '', [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_OBJ,
+            ]);
+        }
+
+        throw new InvalidArgumentException("Unsupported database driver: [{$driver}]");
+    }
+
+    /**
+     * Get the connection configuration array.
+     */
+    protected function configuration(string $name): array
+    {
+        $configRepo = $this->app->make(ConfigRepository::class);
+        $connections = $configRepo->get('database.connections');
+
+        if (! isset($connections[$name])) {
+            throw new InvalidArgumentException("Database connection [{$name}] not configured.");
+        }
+
+        return $connections[$name];
+    }
+
+    /**
+     * Get the default connection name from config.
+     */
+    public function getDefaultConnection(): string
+    {
+        return $this->app->make(ConfigRepository::class)->get('database.default', 'mysql');
+    }
+
+    /**
+     * Dynamically forward method calls to the default connection.
+     * This allows $db->table('users')->... calls.
+     */
+    public function __call(string $method, array $parameters)
+    {
+        return $this->connection()->$method(...$parameters);
+    }
+}
+```
+
+---
+
+### File: `src/Database/Connection.php`
+
+The Connection class wraps the raw PDO instance, handles executing query statements safely, and boots the Query Builder.
+
+```php
+<?php
+
+namespace Framework\Database;
+
+use PDO;
+use Framework\Database\Query\Builder;
+
+class Connection
+{
+    protected PDO $pdo;
+    protected string $name;
+
+    public function __construct(PDO $pdo, string $name = '')
+    {
+        $this->pdo = $pdo;
+        $this->name = $name;
+    }
+
+    /**
+     * Start a fluent Query Builder against a table.
+     */
+    public function table(string $table): Builder
+    {
+        return new Builder($this, $table);
+    }
+
+    /**
+     * Execute a SELECT statement with bound values and return results.
+     */
+    public function select(string $query, array $bindings = []): array
+    {
+        $statement = $this->pdo->prepare($query);
+        $statement->execute($bindings);
+        return $statement->fetchAll(PDO::FETCH_OBJ);
+    }
+
+    /**
+     * Execute an INSERT statement with bound values and return status.
+     */
+    public function insert(string $query, array $bindings = []): bool
+    {
+        $statement = $this->pdo->prepare($query);
+        return $statement->execute($bindings);
+    }
+
+    /**
+     * Get the underlying raw PDO instance.
+     */
+    public function getPdo(): PDO
+    {
+        return $this->pdo;
+    }
+}
+```
+
+---
+
+### File: `src/Database/Query/Builder.php`
+
+The fluent Query Builder compiling PHP methods into structured, parameterized SQL queries safely.
+
+```php
+<?php
+
+namespace Framework\Database\Query;
+
+use Framework\Database\Connection;
+
+class Builder
+{
+    protected Connection $connection;
+    protected string $table;
+    protected array $columns = ['*'];
+    protected array $wheres = [];
+    protected array $orders = [];
+    protected ?int $limit = null;
+    protected array $bindings = [];
+
+    public function __construct(Connection $connection, string $table)
+    {
+        $this->connection = $connection;
+        $this->table = $table;
+    }
+
+    /**
+     * Set the columns to select.
+     */
+    public function select(...$columns): self
+    {
+        $this->columns = is_array($columns[0] ?? null) ? $columns[0] : $columns;
+        return $this;
+    }
+
+    /**
+     * Add a basic WHERE clause with bindings.
+     */
+    public function where(string $column, $operator, $value = null): self
+    {
+        // If only two arguments are passed, assume '=' as the operator
+        if (func_num_args() === 2) {
+            $value = $operator;
+            $operator = '=';
+        }
+
+        $this->wheres[] = [
+            'column' => $column,
+            'operator' => $operator,
+            'value' => $value,
+        ];
+
+        $this->bindings[] = $value;
+
+        return $this;
+    }
+
+    /**
+     * Add an ORDER BY clause.
+     */
+    public function orderBy(string $column, string $direction = 'asc'): self
+    {
+        $this->orders[] = [
+            'column' => $column,
+            'direction' => strtolower($direction) === 'desc' ? 'desc' : 'asc',
+        ];
+        return $this;
+    }
+
+    /**
+     * Add a LIMIT clause.
+     */
+    public function limit(int $value): self
+    {
+        $this->limit = $value;
+        return $this;
+    }
+
+    /**
+     * Compile the SELECT query and fetch all matching records.
+     */
+    public function get(): array
+    {
+        return $this->connection->select($this->toSql(), $this->bindings);
+    }
+
+    /**
+     * Compile and execute an INSERT statement.
+     */
+    public function insert(array $values): bool
+    {
+        $columns = array_keys($values);
+        $placeholders = implode(', ', array_fill(0, count($values), '?'));
+
+        $sql = sprintf(
+            'INSERT INTO %s (%s) VALUES (%s)',
+            $this->table,
+            implode(', ', $columns),
+            $placeholders
+        );
+
+        return $this->connection->insert($sql, array_values($values));
+    }
+
+    /**
+     * Compile the fluent query parameters into a standard SQL string.
+     */
+    public function toSql(): string
+    {
+        $sql = sprintf('SELECT %s FROM %s', implode(', ', $this->columns), $this->table);
+
+        if (! empty($this->wheres)) {
+            $clauses = array_map(function ($where) {
+                return sprintf('%s %s ?', $where['column'], $where['operator']);
+            }, $this->wheres);
+            $sql .= ' WHERE ' . implode(' AND ', $clauses);
+        }
+
+        if (! empty($this->orders)) {
+            $clauses = array_map(function ($order) {
+                return sprintf('%s %s', $order['column'], $order['direction']);
+            }, $this->orders);
+            $sql .= ' ORDER BY ' . implode(', ', $clauses);
+        }
+
+        if ($this->limit !== null) {
+            $sql .= ' LIMIT ' . $this->limit;
+        }
+
+        return $sql;
+    }
+}
+```
+
+---
+
+## ⚙️ Configuration
+
+Now, register the service provider in the Application bootstrap process, define the database connection configuration, and set up your database environment variables.
+
+### 1. Register the Database Service Provider
+
+Update `src/Foundation/Bootstrap/RegisterProviders.php` to include our new `DatabaseServiceProvider`:
+
+```php
+        $providers = [
+            \App\Providers\AppServiceProvider::class,
+            \Framework\Database\DatabaseServiceProvider::class, // <-- ADD THIS
+        ];
+```
+
+### 2. Add `config/database.php`
+
+Create `config/database.php` to define your application's database connections:
+
+```php
+<?php
+
+return [
+    'default' => env('DB_CONNECTION', 'sqlite'),
+
+    'connections' => [
+        'sqlite' => [
+            'driver' => 'sqlite',
+            'database' => env('DB_DATABASE', __DIR__ . '/../database/database.sqlite'),
+        ],
+
+        'mysql' => [
+            'driver' => 'mysql',
+            'host' => env('DB_HOST', '127.0.0.1'),
+            'port' => env('DB_PORT', '3306'),
+            'database' => env('DB_DATABASE', 'laravel_from_scratch'),
+            'username' => env('DB_USERNAME', 'root'),
+            'password' => env('DB_PASSWORD', ''),
+            'charset' => 'utf8mb4',
+        ],
+    ],
+];
+```
+
+### 3. Add Environment Variables to `.env`
+
+Append these variables to your `.env` file:
+
+```env
+DB_CONNECTION=sqlite
+DB_DATABASE=/home/ttndev/workspace/personal/laravel-from-scratch/database/database.sqlite
+```
+
+_(Note: Create the database folder and database.sqlite file if they don't exist: `mkdir -p database && touch database/database.sqlite`)_
+
+---
+
 ## ✅ Verify
 
-Add to `routes/web.php`:
+Add a test route to your `routes/web.php` file:
 
 ```php
 $router->get('/db-test', function () use ($app) {
-    $db = $app['db'];
+    $db = $app->make('db');
 
-    // Insert
+    // Make sure we have a clean test table
+    $pdo = $db->connection()->getPdo();
+    $pdo->exec("CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        email TEXT
+    )");
+
+    // Insert using fluent Query Builder
     $db->table('users')->insert([
         'name'  => 'Alice',
         'email' => 'alice@example.com',
     ]);
 
-    // Select with fluent builder
+    // Select using fluent Query Builder
     $users = $db->table('users')
         ->select('id', 'name', 'email')
         ->where('name', 'Alice')
@@ -359,30 +509,52 @@ $router->get('/db-test', function () use ($app) {
         ->limit(5)
         ->get();
 
-    return json_encode($users);
+    return new \Framework\Http\Response(json_encode($users), 200, [
+        'Content-Type' => 'application/json'
+    ]);
 });
 ```
 
-Run: `php -S 0.0.0.0:8000 -t public` and open `http://localhost:8000/db-test`.
+Run your development server:
+
+```bash
+php -S 0.0.0.0:8000 -t public
+```
+
+Open `http://localhost:8000/db-test` in your browser. You should receive a clean JSON payload containing the inserted database records:
+
+```json
+[
+	{
+		"id": 1,
+		"name": "Alice",
+		"email": "alice@example.com"
+	}
+]
+```
 
 ---
 
 ## 📌 What We Built
 
-| Element                   | Purpose                                                                        |
-| ------------------------- | ------------------------------------------------------------------------------ |
-| `DatabaseManager`         | Resolves named connections lazily from config; caches open connections         |
-| `Connection`              | Owns PDO; executes raw SQL with safe parameterised bindings                    |
-| `Query\Builder`           | Fluent, driver-agnostic SQL builder; compiles to SQL via `Grammar`             |
-| `DatabaseServiceProvider` | Wires all three into the container as `'db'`, `'db.connection'`, `'db.schema'` |
+| Element                   | Purpose                                                                     |
+| :------------------------ | :-------------------------------------------------------------------------- |
+| `DatabaseServiceProvider` | Connects the DatabaseManager and open connections to the container.         |
+| `DatabaseManager`         | Manages multiple driver connections lazily, caching PDO instances.          |
+| `Connection`              | Encapsulates the native `PDO` instance, ensuring secure prepared execution. |
+| `Query\Builder`           | A fluent, driver-agnostic query interface that compiles SQL on demand.      |
 
 ---
 
 ## ⚠️ Simplifications vs Laravel
 
-| Laravel                                        | Our Implementation         | Reason                                                                             |
-| ---------------------------------------------- | -------------------------- | ---------------------------------------------------------------------------------- |
-| `Grammar` per driver (MySQL, Postgres, SQLite) | Not built — reuse original | Each driver dialect needs its own `Grammar`; not core to understanding the pattern |
-| `Processor` post-processes results             | Not built                  | Handles driver-specific quirks like returning last insert ID                       |
-| Read/write split (`::read`, `::write`)         | Not built                  | Production concern for replica databases                                           |
-| `DB::listen()` query logging                   | Not built                  | Hooks into `QueryExecuted` event                                                   |
+| Laravel                      | Our Implementation                        | Reason                                                                                                                       |
+| :--------------------------- | :---------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------- |
+| `Grammar` classes per driver | Compiled inline inside `Builder::toSql()` | A full separate grammar system supporting PostgreSQL, SQLite, MSSQL and MySQL dialects adds hundreds of classes of overhead. |
+| `Processor` classes          | Omitted, using standard PDO fetch modes   | Handles driver-specific post-processing (e.g., returning auto-increment IDs).                                                |
+| Read/Write split             | Single PDO connection resolved            | Advanced high-scale capability for replicating load across master/replica setups.                                            |
+| Database Transactions        | Handled via direct PDO methods if needed  | We omitted a transaction manager class (`DatabaseTransactionsManager`) to keep container services simple.                    |
+
+---
+
+**Next:** [Step 14 — Eloquent ORM →](./14-eloquent-orm.md)
